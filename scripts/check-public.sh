@@ -55,35 +55,44 @@ case "$mode" in
 esac || { red "public-check: gitleaks found a secret (above). Remove it; rotate it if it was ever pushed."; exit 1; }
 
 # ---- 2. system info ----
-# Produce "file:line:text" for the lines to inspect.
-lines() {
+# One grep pass over everything (fast on big trees); only the few hits go through the email/allow filters.
+patfile="$(mktemp)"; trap 'rm -f "$patfile"' EXIT
+printf '%s\n' "${patterns[@]}" > "$patfile"
+pathspec=(-- . ':!scripts/check-public.sh' ':!.public-check-allow' ':!.public-check-baseline')
+hits_raw() {
   case "$mode" in
     --staged|--range)
       if [[ "$mode" == --staged ]]; then git diff --cached -U0 --no-color --diff-filter=ACMR; else git log -p -U0 --no-color --format= $arg; fi |   # $arg word-split on purpose (rev list)
       awk '/^\+\+\+ b\//{f=substr($0,7); next} /^@@/{split($3,a,","); n=substr(a[1],2)+0; next}
-           /^\+/ && f!="" {print f ":" n ":" substr($0,2); n++}' ;;
-    --all)     git grep -n -I -e '' -- . ;;
-    --history) for c in $(git rev-list --all $(history_excludes)); do git grep -n -I -e '' "$c" -- . | sed "s/^$c://"; done | sort -u ;;
+           /^\+/ && f!="" {print f "\t" n "\t" substr($0,2); n++}' |
+      awk -F'\t' '$1!="scripts/check-public.sh" && $1!=".public-check-allow" && $1!=".public-check-baseline"' |
+      while IFS=$'\t' read -r f n text; do
+        grep -qE -f "$patfile" <<<"$text" 2>/dev/null && printf '%s:%s:%s\n' "$f" "$n" "$text"
+      done ;;
+    --all)     git grep -n -I -E -f "$patfile" "${pathspec[@]}" || true ;;
+    --history) git grep -n -I -E -f "$patfile" $(git rev-list --all $(history_excludes)) "${pathspec[@]}" 2>/dev/null |
+               sed -E 's/^[0-9a-f]{40}://' | sort -u || true ;;
   esac
 }
 # --history skips commits reachable from the shas in .public-check-baseline (history reviewed and accepted as-is
 # before the repo went public; Eric 21 Nov 2026). New commits are always checked.
 history_excludes() { [[ -f .public-check-baseline ]] && grep -oE '^[0-9a-f]{7,40}' .public-check-baseline | sed 's/^/^/' || true; }
-skip_file() { [[ "$1" == scripts/check-public.sh || "$1" == .public-check-allow || "$1" == .public-check-baseline ]]; }
 
 hits=0
 while IFS= read -r rec; do
+  [[ -z "$rec" ]] && continue
   f="${rec%%:*}"; rest="${rec#*:}"; text="${rest#*:}"
-  skip_file "$f" && continue
+  real=0
   for p in "${patterns[@]}"; do
     m="$(grep -oE -- "$p" <<<"$text" | head -1 || true)"
     [[ -z "$m" ]] && continue
     if [[ "$m" == *@* ]] && grep -qE -- "$EMAIL_OK" <<<"$m"; then continue; fi
     ok=0; for a in "${allow[@]+"${allow[@]}"}"; do grep -qE -- "$a" <<<"$text" && { ok=1; break; }; done
     (( ok )) && continue
-    red "system info: ${f}:${rest%%:*}: matched /${p}/"; hits=$((hits+1)); break
+    red "system info: ${f}:${rest%%:*}: matched /${p}/"; real=1; break
   done
-done < <(lines)
+  (( real )) && hits=$((hits+1))
+done < <(hits_raw)
 
 if (( hits )); then
   red "public-check: $hits line(s) carry machine/system details. Replace with placeholders (~, <home>, example.com),"
