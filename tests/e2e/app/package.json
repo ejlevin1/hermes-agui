@@ -1,0 +1,27 @@
+{
+ "name": "hermes-agui-e2e-app",
+ "private": true,
+ "type": "module",
+ "scripts": {
+  "build": "vite build"
+ },
+ "dependencies": {
+  "@copilotkit/core": "1.90.0",
+  "@copilotkit/react-core": "1.90.0",
+  "@copilotkit/shared": "1.90.0",
+  "@emotion/react": "^11",
+  "@emotion/styled": "^11",
+  "@mui/material": "^7",
+  "react": "^19",
+  "react-dom": "^19",
+  "zod": "^3.25.76"
+ },
+ "devDependencies": {
+  "@playwright/test": "^1.65.1",
+  "@types/react": "^19",
+  "@types/react-dom": "^19",
+  "@vitejs/plugin-react": "^5",
+  "typescript": "^5",
+  "vite": "^7"
+ }
+}

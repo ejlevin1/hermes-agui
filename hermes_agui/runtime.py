@@ -32,7 +32,7 @@ __all__ = ["HEARTBEAT_S", "make_router"]
 
 log = logging.getLogger(__name__)
 
-HEARTBEAT_S = 15.0
+HEARTBEAT_S = 10.0
 """SSE comment heartbeat interval: oauth2-proxy 502s after 30 s without headers, nginx idles at 60 s (S9-C)."""
 
 _HB = b": heartbeat\n\n"

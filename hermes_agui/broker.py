@@ -45,6 +45,7 @@ class _Session:
     waiters: dict[str, list[tuple[asyncio.AbstractEventLoop, asyncio.Event]]] = field(
         default_factory=dict
     )
+    rejected: set[str] = field(default_factory=set)
     dead: bool = False
 
 
@@ -84,6 +85,8 @@ class MemoryBroker:
             c = s.calls.get(tool_call_id)
             if c is not None:
                 return {"name": c.name, "args": c.args}
+            if tool_call_id in s.rejected:
+                return None
             s.waiters.setdefault(tool_call_id, []).append((loop, ev))
         try:
             await asyncio.wait_for(ev.wait(), timeout)
@@ -143,6 +146,8 @@ class MemoryBroker:
                 raise KeyError(session_id)
             spec = s.tools.get(name)
             if spec is None:
+                s.rejected.add(tool_call_id)
+                self._wake_locked(s, tool_call_id)
                 return [f"unknown frontend tool {name!r}; available: {sorted(s.tools)}"]
             if tool_call_id in s.calls:
                 raise ValueError(tool_call_id)
@@ -151,6 +156,12 @@ class MemoryBroker:
             for e in Draft202012Validator(spec.parameters).iter_errors(args)
         )
         if errors:
+            # rejected: remember it (a later wait_call returns at once) and wake current waiters
+            with self._lock:
+                s = self._sessions.get(session_id)
+                if s is not None and not s.dead:
+                    s.rejected.add(tool_call_id)
+                    self._wake_locked(s, tool_call_id)
             return errors
         with self._lock:
             s = self._sessions.get(session_id)
@@ -163,6 +174,12 @@ class MemoryBroker:
         for loop, ev in waiters:
             loop.call_soon_threadsafe(ev.set)
         return None
+
+    @staticmethod
+    def _wake_locked(s: _Session, tool_call_id: str) -> None:
+        """Wake (without a call) the waiters of ``tool_call_id``; caller holds the lock."""
+        for loop, ev in s.waiters.get(tool_call_id, []):
+            loop.call_soon_threadsafe(ev.set)
 
     def poll_result(
         self, session_id: str, tool_call_id: str, wait: float
