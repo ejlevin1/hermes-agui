@@ -189,3 +189,17 @@ def test_wait_call_wakes_when_registration_rejected(client, broker, kw):
     assert status == 422
     assert res is None
     assert took < 2
+
+
+@pytest.mark.parametrize("kw", [{"args": {"title": 3}}, {"name": "nope"}])
+def test_wait_call_after_rejection_returns_at_once(client, broker, kw):
+    assert call(client, **kw).status_code == 422
+
+    async def go():
+        start = asyncio.get_running_loop().time()
+        res = await broker.wait_call(SID, "c1", 20)
+        return res, asyncio.get_running_loop().time() - start
+
+    res, took = asyncio.run(go())
+    assert res is None
+    assert took < 1

@@ -154,9 +154,10 @@ test("6 two surfaces stay isolated (session ids, tools)", async () => {
   expect(names(a.runs[0])).toEqual(["ask_choice", "set_fields"]); expect(names(b.runs[0])).toEqual(["other_tool"]);
   expect((await dbgFor(sb)).some((e) => e.ev === "register_call" && e.name === "set_fields")).toBe(false);
   // the other surface cannot call this surface's tool: the gateway tool gets a validation error and the model sees it
-  const tidC = `t-iso-c-${uid()}`; const c = await open(ctx, "test.other", tidC);
+  const tidC = `t-iso-c-${uid()}`; const c = await open(ctx, "test.other", tidC); const tC = Date.now();
   await say(c.page, "[[SC:crosscall]] try");
   await expect(lastAssistant(c.page)).toContainText("unknown frontend tool", { timeout: 60000 });
+  expect(Date.now() - tC).toBeLessThan(15000);
   expect(await c.page.getByTestId("other-note").textContent()).toBe("");
 });
 
@@ -171,7 +172,7 @@ test("7 idle 40 s model silence sees heartbeats <= 15 s apart", async () => {
   expect(r.ms).toBeGreaterThanOrEqual(38000);
   expect(stamps.length).toBeGreaterThanOrEqual(2);
   const marks = [0, ...all]; let maxGap = 0; for (let i = 1; i < marks.length; i++) maxGap = Math.max(maxGap, marks[i] - marks[i - 1]);
-  console.log(`max gap between any two chunks: ${maxGap} ms`); expect(maxGap).toBeLessThanOrEqual(16000);
+  console.log(`max gap between any two chunks: ${maxGap} ms`); expect(maxGap).toBeLessThanOrEqual(15000);
 });
 
 test("8 invalid frontend args: validation error reaches the model", async () => {
