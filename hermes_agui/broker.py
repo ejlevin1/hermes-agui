@@ -143,6 +143,7 @@ class MemoryBroker:
                 raise KeyError(session_id)
             spec = s.tools.get(name)
             if spec is None:
+                self._wake_locked(s, tool_call_id)
                 return [f"unknown frontend tool {name!r}; available: {sorted(s.tools)}"]
             if tool_call_id in s.calls:
                 raise ValueError(tool_call_id)
@@ -151,6 +152,12 @@ class MemoryBroker:
             for e in Draft202012Validator(spec.parameters).iter_errors(args)
         )
         if errors:
+            with (
+                self._lock
+            ):  # rejected: wake wait_call (returns None) so the bridge stops waiting
+                s = self._sessions.get(session_id)
+                if s is not None:
+                    self._wake_locked(s, tool_call_id)
             return errors
         with self._lock:
             s = self._sessions.get(session_id)
@@ -163,6 +170,12 @@ class MemoryBroker:
         for loop, ev in waiters:
             loop.call_soon_threadsafe(ev.set)
         return None
+
+    @staticmethod
+    def _wake_locked(s: _Session, tool_call_id: str) -> None:
+        """Wake (without a call) the waiters of ``tool_call_id``; caller holds the lock."""
+        for loop, ev in s.waiters.get(tool_call_id, []):
+            loop.call_soon_threadsafe(ev.set)
 
     def poll_result(
         self, session_id: str, tool_call_id: str, wait: float

@@ -173,3 +173,19 @@ def test_open_session_rejects_invalid_schema():
     bad = FrontendToolSpec(name="t", description="d", parameters={"type": 12})
     with pytest.raises(Exception):
         MemoryBroker().open_session("s", [bad])
+
+
+@pytest.mark.parametrize("kw", [{"args": {"title": 3}}, {"name": "nope"}])
+def test_wait_call_wakes_when_registration_rejected(client, broker, kw):
+    async def go():
+        t = asyncio.create_task(broker.wait_call(SID, "c1", 20))
+        await asyncio.sleep(0.1)
+        start = asyncio.get_running_loop().time()
+        r = await asyncio.to_thread(call, client, **kw)
+        res = await t
+        return r.status_code, res, asyncio.get_running_loop().time() - start
+
+    status, res, took = asyncio.run(go())
+    assert status == 422
+    assert res is None
+    assert took < 2
