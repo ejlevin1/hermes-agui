@@ -12,6 +12,8 @@ AG-UI / CopilotKit-runtime bridge and **frontend tools** for [Hermes Agent](http
 Status: **0.1.0** (first release). See `CHANGELOG.md`. Design and spike evidence: `docs/design/`, hermes-items
 `docs/spikes/S7.md`, `S8.md`.
 
+How it works (C4 + sequence diagrams): [ARCHITECTURE.md](ARCHITECTURE.md)
+
 ## Install (host app)
 Two halves, both pinned to the same commit; details and caveats in `docs/packaging.md`.
 ```sh
