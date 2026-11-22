@@ -63,10 +63,13 @@ lines() {
       awk '/^\+\+\+ b\//{f=substr($0,7); next} /^@@/{split($3,a,","); n=substr(a[1],2)+0; next}
            /^\+/ && f!="" {print f ":" n ":" substr($0,2); n++}' ;;
     --all)     git grep -n -I -e '' -- . ;;
-    --history) for c in $(git rev-list --all); do git grep -n -I -e '' "$c" -- . | sed "s/^$c://"; done | sort -u ;;
+    --history) for c in $(git rev-list --all $(history_excludes)); do git grep -n -I -e '' "$c" -- . | sed "s/^$c://"; done | sort -u ;;
   esac
 }
-skip_file() { [[ "$1" == scripts/check-public.sh || "$1" == .public-check-allow ]]; }
+# --history skips commits reachable from the shas in .public-check-baseline (history reviewed and accepted as-is
+# before the repo went public; Eric 21 Nov 2026). New commits are always checked.
+history_excludes() { [[ -f .public-check-baseline ]] && grep -oE '^[0-9a-f]{7,40}' .public-check-baseline | sed 's/^/^/' || true; }
+skip_file() { [[ "$1" == scripts/check-public.sh || "$1" == .public-check-allow || "$1" == .public-check-baseline ]]; }
 
 hits=0
 while IFS= read -r rec; do
