@@ -1,0 +1,47 @@
+vendored tree:
+vendor/hermes_agui/__init__.py
+vendor/hermes_agui/_rel_probe.py
+--- enable
+Preparing the isolated Hermes runtime…
+  → Installing Python dependencies…
+  ✓ Installing Python dependencies
+  → Installing Python dependencies…
+  ✓ Installing Python dependencies
+✓ Plugin agui_host_probe enabled.
+dashboard binary: /Users/ejlevin1/hermes-agui-work/proof/homes/4/installs/cd3f93267711b284/environments/518c93d98d0c41efb5d73b233d90824f/venv/bin/hermes
+--- report (4)
+{
+    "python": "/Users/ejlevin1/hermes-agui-work/proof/homes/4/installs/cd3f93267711b284/environments/518c93d98d0c41efb5d73b233d90824f/venv/bin/python",
+    "version": "3.14.9",
+    "hermes_agui": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'hermes_agui'"
+    },
+    "hermes_agui_plugin": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'hermes_agui_plugin'"
+    },
+    "agui_frontend": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'agui_frontend'"
+    },
+    "hermes_plugins.agui_host_probe.vendor.hermes_agui": {
+        "ok": true,
+        "file": "/Users/ejlevin1/hermes-agui-work/proof/homes/4/plugins/agui_host_probe/vendor/hermes_agui/__init__.py",
+        "version": "0.0.1"
+    },
+    "vendor_dir_exists": true,
+    "vendor_syspath": {
+        "ok": true,
+        "file": "/Users/ejlevin1/hermes-agui-work/proof/homes/4/plugins/agui_host_probe/vendor/hermes_agui/__init__.py",
+        "relative_import_ok": true
+    },
+    "agui_modules": [
+        "hermes_agui",
+        "hermes_agui._rel_probe",
+        "hermes_dashboard_plugin_agui_host_probe",
+        "hermes_plugins.agui_host_probe",
+        "hermes_plugins.agui_host_probe.vendor",
+        "hermes_plugins.agui_host_probe.vendor.hermes_agui"
+    ]
+}
