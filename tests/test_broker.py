@@ -167,3 +167,9 @@ def test_auth_required(client):
 def test_empty_token_refused(broker):
     with pytest.raises(ValueError):
         broker_router(broker, token="")
+
+
+def test_open_session_rejects_invalid_schema():
+    bad = FrontendToolSpec(name="t", description="d", parameters={"type": 12})
+    with pytest.raises(Exception):
+        MemoryBroker().open_session("s", [bad])

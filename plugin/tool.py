@@ -148,6 +148,10 @@ def run_call(
             return res if isinstance(res, str) else json.dumps(res)
         if code == 410:
             return json.dumps({"status": "cancelled"})
+        if code in (401, 403):
+            return json.dumps(
+                {"status": "error", "error": f"broker auth failed ({code})"}
+            )
         if code != 204:
             time.sleep(_SLICE_S)
 

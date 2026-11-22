@@ -61,6 +61,8 @@ class MemoryBroker:
 
     # -- Broker protocol -------------------------------------------------
     def open_session(self, session_id: str, tools: Sequence[FrontendToolSpec]) -> None:
+        for t in tools:
+            Draft202012Validator.check_schema(t.parameters)  # fail early, not as a 500
         with self._lock:
             old = self._sessions.get(session_id)
             if old is not None and not old.dead:
