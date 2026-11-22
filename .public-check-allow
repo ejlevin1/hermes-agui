@@ -1,0 +1,2 @@
+# Narrow regexes for lines that legitimately match a system-info pattern (matched against the whole line).
+# Keep each one specific and explain it.

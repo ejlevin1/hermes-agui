@@ -4,7 +4,7 @@ Sources:
 - S7 = `docs/spikes/S7.md` (dev Mac: Hermes side, mock LLM).
 - S8 = `docs/spikes/S8.md` (dev Mac: real CopilotKit 1.90.0 client against a scripted Python endpoint).
 - Both are in hermes-items origin/main `bf87b0c`.
-- S9 = `S9.md` here (Mac mini: A = S7 re-run on the live Hermes code, plus the multiplexed `/p/<profile>/`; B = 20
+- S9 = `S9.md` here (Hermes host: A = S7 re-run on the live Hermes code, plus the multiplexed `/p/<profile>/`; B = 20
   real-model conversations; C = edge).
 
 Verdicts: **VERIFIED** = run and held · **CHANGED** = run, and the plan must change · **UNVERIFIED** = not run (reason given).

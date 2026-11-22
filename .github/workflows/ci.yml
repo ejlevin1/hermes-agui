@@ -6,4 +6,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv run -q -p 3.14 pytest -q
+      - run: uv run -q -p 3.14 pytest -q --ignore=tests/e2e
+  public-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: install gitleaks
+        run: |
+          v=8.28.0
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${v}/gitleaks_${v}_linux_x64.tar.gz" | tar -xz -C /usr/local/bin gitleaks
+      - run: scripts/check-public.sh --all
+      - run: scripts/check-public.sh --history
