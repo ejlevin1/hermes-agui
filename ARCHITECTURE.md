@@ -5,206 +5,274 @@ hermes-agui connects a browser UI built with [CopilotKit](https://github.com/Cop
 profile. It also lets the agent call **frontend tools**: actions that run in the user's browser, such as filling a form
 field, with the result going back to the agent.
 
-It has two halves:
+**Nothing here is a separate service.** hermes-agui ships two pieces, and both run inside processes that already
+exist:
 
-| Half | Runs in | Code | Job |
+| Piece | What it is | Runs inside | Code |
 |---|---|---|---|
-| **Bridge** (library) | The host app's process, e.g. a Hermes dashboard plugin | `hermes_agui/` | CopilotKit runtime-v2 + AG-UI endpoints, Hermes API client, event translation, transcript, broker |
-| **Gateway plugin** | The Hermes gateway, on profiles that serve agentic surfaces | `plugin/` | The `call_frontend_tool` tool the model calls |
+| **hermes_agui** | Python **library**, imported by a host app's Hermes **dashboard plugin** | The Hermes dashboard process | `hermes_agui/` |
+| **agui_frontend** | Hermes **gateway plugin** that registers the tool `call_frontend_tool` | The Hermes gateway process, enabled only on the profile that serves the UI | `plugin/` |
 
-Placeholders used below: `<host>` is the host app's mount prefix, `<profile>` is the Hermes profile that serves the
-surface.
+The diagrams use the same names everywhere. The C4 diagrams below are drawn as Mermaid flowcharts with C4 notation,
+because Mermaid's native C4 renderer overlaps text on GitHub.
 
-## Concepts
+**Legend:**
+- Dark blue = person.
+- Blue = container (something that runs or stores data).
+- Light blue = component inside a container.
+- Grey = external system.
+- Dashed boxes = OS processes.
+- Each box says **what kind of thing it is** in brackets.
 
-- **Surface:** one agent-assisted UI, such as a form, registered by the host app. Its `id` is the CopilotKit
-  `agentId`. A surface defines the Hermes profile that serves it, who may use it (`authorize`), the per-turn
-  instructions (`build_instructions`), and the frontend tools it allows (`FrontendToolSpec`, whose JSON Schemas live on
-  the server and are authoritative).
-- **Thread → Hermes session:** each CopilotKit thread maps to one Hermes session, `<surface>:<principal>:<threadId>`.
-- **Turn vs run:** one Hermes turn can span several AG-UI runs. Run 1 ends when the agent calls a frontend tool. The
-  browser executes the tool and starts run 2 carrying the result, and the bridge keeps streaming the same Hermes turn
-  into it.
-- **Broker:** an in-memory meeting point. The gateway registers each frontend call there with its name and args, and
-  the bridge resolves it with the browser's result. It is reachable only on loopback, with a bearer token.
+## Names used in every diagram
 
-## C4: system context
+| Name | Kind | Lives in |
+|---|---|---|
+| **Host SPA** | Web app (React + CopilotKit v2) | Browser |
+| **Edge proxy** | Reverse proxy + login (e.g. nginx + an auth proxy) | Its own container(s) |
+| **Host plugin** | Hermes dashboard plugin of the host app (e.g. hermes-items) | Hermes dashboard process |
+| **Surface** | Host code: one agent-assisted UI (authorize, instructions, tool schemas) | Host plugin |
+| **agui router** | `make_router` (CopilotKit runtime v2 + AG-UI routes) | hermes_agui, in the Host plugin |
+| **Translator** | Hermes events → AG-UI events | hermes_agui |
+| **Broker** | `MemoryBroker` + its HTTP routes `broker_router` | hermes_agui |
+| **Hermes client** | `HttpHermesClient` | hermes_agui |
+| **Transcript store** | `SqliteTranscriptStore` (a SQLite file) | hermes_agui |
+| **Hermes API server** | `/p/<profile>/v1/runs` | Hermes gateway process |
+| **Agent loop** | The profile's model + tools loop | Hermes gateway process |
+| **call_frontend_tool** | The tool of the agui_frontend gateway plugin | Hermes gateway process |
+| **LLM** | Model provider | External |
+
+## C4 level 1: system context
 
 ```mermaid
-C4Context
-  title System context: agent-assisted UI with hermes-agui
+flowchart TB
+  user(["<b>User</b><br/>[Person]<br/>fills a form together with an agent"])
+  host["<b>Host app</b><br/>[Software system: Hermes dashboard plugin]<br/>agent-assisted pages, embeds hermes_agui"]
+  edge["<b>Edge proxy</b><br/>[External system]<br/>TLS, login, exact-path allowlist"]
+  gw["<b>Hermes gateway</b><br/>[Software system]<br/>runs the profile that serves the UI"]
+  llm["<b>LLM</b><br/>[External system]<br/>model provider"]
 
-  Person(user, "User", "Fills a form together with an agent")
-  System(host, "Host app", "Web app with agent-assisted surfaces, e.g. a Hermes dashboard plugin. Embeds the hermes-agui bridge")
-  System_Ext(hermes, "Hermes Agent gateway", "Runs the profile that serves the surface; API server /v1/runs")
-  System_Ext(llm, "LLM provider", "The model behind the profile")
-  System_Ext(edge, "Edge (reverse proxy / auth)", "TLS, login, exact-path allowlist")
+  user -->|"uses<br/>HTTPS"| edge
+  edge -->|"forwards allowed paths<br/>HTTP + SSE"| host
+  host -->|"starts / streams / stops runs<br/>HTTP + SSE, API key"| gw
+  gw -->|"frontend tool calls<br/>loopback HTTP, token"| host
+  gw -->|"completions"| llm
 
-  Rel(user, edge, "Uses", "HTTPS")
-  Rel(edge, host, "Forwards allowed paths", "HTTP + SSE")
-  Rel(host, hermes, "Starts runs, streams events, stops runs", "HTTP + SSE, API key")
-  Rel(hermes, host, "Registers frontend tool calls, polls results", "HTTP loopback, broker token")
-  Rel(hermes, llm, "Completions with tools")
+  classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+  classDef system fill:#1168bd,stroke:#0b4884,color:#ffffff
+  classDef ext fill:#6b6b6b,stroke:#4d4d4d,color:#ffffff
+  class user person
+  class host,gw system
+  class edge,llm ext
 ```
 
-## C4: containers
+## C4 level 2: containers and where they run
 
 ```mermaid
-C4Container
-  title Containers
+flowchart LR
+  user(["<b>User</b><br/>[Person]"])
 
-  Person(user, "User")
+  subgraph P1["Process: web browser"]
+    spa["<b>Host SPA</b><br/>[Container: React + CopilotKit v2]<br/>chat + form, frontend tool handlers"]
+  end
 
-  System_Boundary(browser, "Browser") {
-    Container(spa, "Host SPA", "React + CopilotKit v2", "Chat + form; registers frontend tools (useFrontendTool) and form state (useAgentContext); runtimeUrl = the bridge")
-  }
+  edge["<b>Edge proxy</b><br/>[Container: nginx + auth proxy]<br/>exact paths, SSE buffering off"]
 
-  System_Boundary(hostp, "Host app process") {
-    Container(hostcode, "Host plugin code", "Python", "Surfaces: authorize, build_instructions, tool schemas; the human commit actions (Create / Save)")
-    Container(bridge, "hermes-agui bridge", "Python, FastAPI router", "CopilotKit runtime v2 + AG-UI routes, Translator, MemoryBroker, TranscriptStore")
-    ContainerDb(store, "Transcript store", "SQLite", "Messages per thread, for replay on reload")
-  }
+  subgraph P2["Process: Hermes dashboard (Python)"]
+    hp["<b>Host plugin</b><br/>[Container: Hermes dashboard plugin]<br/>Surfaces + hermes_agui library<br/>(imported, same process)"]
+    ts[("<b>Transcript store</b><br/>[Container: SQLite file]<br/>chat replay")]
+  end
 
-  System_Boundary(gw, "Hermes gateway") {
-    Container(api, "API server", "Hermes", "/v1/runs, /v1/runs/{id}/events, /v1/runs/{id}/stop")
-    Container(agent, "Agent loop (profile)", "Hermes", "Model + toolsets; per-turn instructions")
-    Container(plugin, "agui_frontend plugin", "Hermes plugin, stdlib", "Tool call_frontend_tool")
-  }
+  subgraph P3["Process: Hermes gateway (Python)"]
+    api["<b>Hermes API server</b><br/>[Container: Hermes core]<br/>/p/&lt;profile&gt;/v1/runs"]
+    ag["<b>Agent loop</b><br/>[Container: Hermes core, profile]<br/>model + toolsets"]
+    ft["<b>call_frontend_tool</b><br/>[Container: Hermes gateway plugin agui_frontend]<br/>enabled only on &lt;profile&gt;"]
+  end
 
-  System_Ext(llm, "LLM provider")
+  llm["<b>LLM</b><br/>[External system]"]
 
-  Rel(user, spa, "Types, edits fields, clicks")
-  Rel(spa, bridge, "GET info; POST agent/{id}/run|connect|stop", "HTTPS, SSE (AG-UI events)")
-  Rel(bridge, hostcode, "authorize / build_instructions")
-  Rel(bridge, store, "append / read")
-  Rel(bridge, api, "start_run, events, stop", "HTTP + SSE")
-  Rel(api, agent, "Runs turn")
-  Rel(agent, llm, "Completions")
-  Rel(agent, plugin, "Calls call_frontend_tool(tool_name, args)")
-  Rel(plugin, bridge, "POST broker/call; GET broker/result", "loopback HTTP, bearer token")
-  Rel(spa, hostcode, "Commit (Create / Save): only on a human click", "HTTPS")
+  user --> spa
+  spa -->|"info / run / connect / stop<br/>HTTPS + SSE (AG-UI)"| edge
+  edge -->|"HTTP + SSE"| hp
+  hp -->|"read / write"| ts
+  hp -->|"start run, events, stop<br/>HTTP + SSE, API key"| api
+  api --> ag
+  ag -->|"completions"| llm
+  ag -->|"calls tool"| ft
+  ft -->|"register call, poll result<br/>loopback HTTP, token"| hp
+  spa -.->|"Create / Save<br/>(human click only)"| edge
+
+  classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+  classDef container fill:#1168bd,stroke:#0b4884,color:#ffffff
+  classDef ext fill:#6b6b6b,stroke:#4d4d4d,color:#ffffff
+  class user person
+  class spa,hp,ts,api,ag,ft container
+  class edge,llm ext
+  style P1 fill:none,stroke:#888,stroke-dasharray:5 5
+  style P2 fill:none,stroke:#888,stroke-dasharray:5 5
+  style P3 fill:none,stroke:#888,stroke-dasharray:5 5
 ```
 
-## C4: components of the bridge
+## C4 level 3: components inside the Host plugin
 
 ```mermaid
-C4Component
-  title Components: hermes_agui (inside the host process)
+flowchart TB
+  spa["<b>Host SPA</b><br/>[Container: browser]"]
+  api["<b>Hermes API server</b><br/>[Container: gateway process]"]
+  ft["<b>call_frontend_tool</b><br/>[Container: gateway plugin]"]
 
-  Container_Boundary(lib, "hermes_agui") {
-    Component(router, "make_router", "runtime.py", "Routes info, agent/{id}/run|connect|stop, agui/{id}. Headers + RUN_STARTED at once; SSE heartbeat every 10 s; one _Active entry per Hermes session")
-    Component(reg, "SurfaceRegistry / Surface", "surface.py", "Host-registered surfaces; session id prefixing; Principal, TurnContext, FrontendToolSpec")
-    Component(tr, "Translator", "translate.py", "Hermes run events to AG-UI events; frontend calls become TOOL_CALL_START/ARGS/END with the real name + args")
-    Component(hc, "HttpHermesClient", "hermes_client.py", "/p/<profile>/v1/runs, events SSE, stop")
-    Component(br, "MemoryBroker + broker_router", "broker.py", "Calls keyed by (session, tool_call_id); schema validation (422); late/duplicate results rejected; stop drops the session (410)")
-    Component(st, "SqliteTranscriptStore", "store.py", "Thread transcript for connect replay")
-  }
+  subgraph HP["Host plugin  [Hermes dashboard plugin, runs in the dashboard process]"]
+    sf["<b>Surface</b><br/>[Component: host code]<br/>authorize, build_instructions,<br/>frontend tool schemas"]
+    subgraph LIB["hermes_agui  [Python library, imported]"]
+      rt["<b>agui router</b><br/>[Component: runtime.py]<br/>routes: info, run,<br/>connect, stop<br/>headers first,<br/>heartbeat every 10 s"]
+      tr["<b>Translator</b><br/>[Component: translate.py]<br/>Hermes events to AG-UI events"]
+      br["<b>Broker</b><br/>[Component: broker.py]<br/>pending frontend calls,<br/>schema check, late results rejected"]
+      hc["<b>Hermes client</b><br/>[Component: hermes_client.py]"]
+      ts[("<b>Transcript store</b><br/>[Component: store.py, SQLite]")]
+    end
+  end
 
-  Container_Ext(hermes, "Hermes API server")
-  Container_Ext(gwplugin, "agui_frontend plugin")
-  Container_Ext(spa, "Browser (CopilotKit)")
+  spa -->|"run / connect / stop<br/>SSE"| rt
+  rt -->|"authorize, instructions"| sf
+  rt -->|"frames in, events out"| tr
+  tr -->|"name + args for a call"| br
+  rt -->|"resolve result, drop on stop"| br
+  rt -->|"start, events, stop"| hc
+  hc -->|"HTTP + SSE"| api
+  rt -->|"append, replay"| ts
+  ft -->|"broker/call, broker/result<br/>loopback, token"| br
 
-  Rel(spa, router, "run / connect / stop / info")
-  Rel(router, reg, "resolve surface, authorize, instructions")
-  Rel(router, hc, "start_run / events / stop")
-  Rel(hc, hermes, "HTTP + SSE")
-  Rel(router, tr, "frames in, AG-UI events out")
-  Rel(tr, br, "wait_call(session, tool_call_id) for name + args")
-  Rel(router, br, "open_session / resolve / drop_session")
-  Rel(router, st, "append / messages")
-  Rel(gwplugin, br, "register call / poll result")
+  classDef component fill:#85bbf0,stroke:#5d82a8,color:#000000
+  classDef container fill:#1168bd,stroke:#0b4884,color:#ffffff
+  class sf,rt,tr,br,hc,ts component
+  class spa,api,ft container
+  style HP fill:none,stroke:#888,stroke-dasharray:5 5
+  style LIB fill:none,stroke:#1168bd
 ```
 
 ## Flows
+
+Each participant is a box from the diagrams above, grouped by the process it runs in.
 
 ### 1. A plain chat turn
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant B as Browser (CopilotKit)
-  participant R as Bridge router
-  participant S as Surface (host code)
-  participant H as Hermes API server
-  participant M as Model
-
-  B->>R: POST agent/{surface}/run (RunAgentInput: threadId, runId, messages, context[])
-  R-->>B: 200 + RUN_STARTED (before anything slow)
-  R->>S: authorize(request) then build_instructions(TurnContext)
-  R->>H: POST /p/<profile>/v1/runs {session_id, input = trailing user message only, instructions}
-  H->>M: completion
-  loop events
-    H-->>R: message.delta
-    R-->>B: TEXT_MESSAGE_START / CONTENT
+  box rgba(120,120,120,0.12) Browser
+    participant SPA as Host SPA
   end
-  Note over R,B: ": heartbeat" SSE comment every 10 s while quiet
-  H-->>R: run.completed
-  R-->>B: TEXT_MESSAGE_END, RUN_FINISHED
-  R->>R: store.append(user + assistant messages)
+  box rgba(17,104,189,0.12) Hermes dashboard process
+    participant RT as agui router
+    participant SF as Surface
+    participant TR as Translator
+    participant TS as Transcript store
+  end
+  box rgba(8,66,123,0.12) Hermes gateway process
+    participant API as Hermes API server
+    participant AG as Agent loop
+  end
+
+  SPA->>RT: POST run (threadId, runId, messages, context)
+  RT-->>SPA: response headers + RUN_STARTED at once
+  RT->>SF: authorize, then build_instructions
+  RT->>API: POST /v1/runs (session_id, new message only, instructions)
+  API->>AG: run the turn
+  loop while the model writes
+    AG-->>API: text
+    API-->>RT: message.delta
+    RT->>TR: translate
+    TR-->>SPA: TEXT_MESSAGE_START / CONTENT
+  end
+  Note over RT,SPA: ": heartbeat" every 10 s while quiet
+  API-->>RT: run.completed
+  TR-->>SPA: TEXT_MESSAGE_END, RUN_FINISHED
+  RT->>TS: append user + assistant messages
 ```
 
-The client re-sends the full history on every run. The bridge sends Hermes only the new trailing message, because
-Hermes keeps the session itself. The per-turn `instructions` carry live state (form values, ownership, allowed tools)
-and are never stored by Hermes.
+The browser re-sends the whole history on every run. The agui router sends the Hermes API server only the new last
+message, because Hermes keeps the session itself. The per-turn instructions carry live state (form values,
+ownership, allowed tools) and Hermes never stores them.
 
-### 2. A frontend tool call (one Hermes turn, two AG-UI runs)
+### 2. A frontend tool call: one Hermes turn, two browser runs
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant B as Browser (CopilotKit)
-  participant R as Bridge router + Translator
-  participant K as Broker
-  participant H as Hermes API server
-  participant P as call_frontend_tool (gateway plugin)
-
-  B->>R: POST run (run 1)
-  R-->>B: RUN_STARTED
-  R->>K: open_session(session, surface tools)
-  R->>H: POST /v1/runs
-  H->>P: model calls call_frontend_tool(tool_name="set_fields", args)
-  P->>K: POST broker/call {session_id, tool_call_id, tool_name, args} (bearer token)
-  K->>K: validate args against OUR schema (422 + errors back to the model if invalid)
-  H-->>R: tool.started {tool_call_id} (Hermes events carry no name/args)
-  R->>K: wait_call(session, tool_call_id)
-  K-->>R: {name: set_fields, args}
-  R-->>B: TOOL_CALL_START / ARGS / END (real name + args)
-  R-->>B: RUN_FINISHED (run 1 ends, the Hermes turn keeps waiting)
-  loop every <= 1 s until result, stop or timeout
-    P->>K: GET broker/result?session_id&tool_call_id
-    K-->>P: 204 pending
+  box rgba(120,120,120,0.12) Browser
+    participant SPA as Host SPA
   end
-  B->>B: useFrontendTool handler applies the fields, builds per-field results
-  B->>R: POST run (run 2) with messages ending in {role: tool, toolCallId, content}
-  R-->>B: RUN_STARTED
-  R->>K: resolve(session, tool_call_id, content)
-  P->>K: GET broker/result
-  K-->>P: 200 result
-  P-->>H: tool result returned to the model
-  H-->>R: message.delta ... run.completed (same event stream as run 1)
-  R-->>B: TEXT_MESSAGE_*, RUN_FINISHED
+  box rgba(17,104,189,0.12) Hermes dashboard process
+    participant RT as agui router
+    participant TR as Translator
+    participant BR as Broker
+  end
+  box rgba(8,66,123,0.12) Hermes gateway process
+    participant API as Hermes API server
+    participant AG as Agent loop
+    participant FT as call_frontend_tool
+  end
+
+  SPA->>RT: POST run (run 1)
+  RT-->>SPA: RUN_STARTED
+  RT->>BR: open session with the Surface's tools
+  RT->>API: POST /v1/runs
+  API->>AG: run the turn
+  AG->>FT: call_frontend_tool("set_fields", args)
+  FT->>BR: POST broker/call (session, call id, name, args)
+  Note over BR: checks args against<br/>the Surface schema
+  API-->>RT: tool.started (call id only, no name or args)
+  RT->>TR: translate
+  TR->>BR: wait for call (session, call id)
+  BR-->>TR: name + args
+  TR-->>SPA: TOOL_CALL_START / ARGS / END
+  TR-->>SPA: RUN_FINISHED (run 1 ends, the turn keeps waiting)
+  loop every 1 s
+    FT->>BR: GET broker/result
+    BR-->>FT: 204 pending
+  end
+  Note over SPA: tool handler fills the fields<br/>and builds per-field results
+  SPA->>RT: POST run (run 2), last message = tool result
+  RT-->>SPA: RUN_STARTED
+  RT->>BR: resolve(session, call id, result)
+  FT->>BR: GET broker/result
+  BR-->>FT: 200 result
+  FT-->>AG: tool result
+  AG-->>API: reply text
+  API-->>RT: message.delta, run.completed (same stream as run 1)
+  RT->>TR: translate
+  TR-->>SPA: TEXT_MESSAGE_*, RUN_FINISHED
 ```
 
-### 3. Human-in-the-loop tool (the agent asks, the user clicks)
+If the args are invalid, `broker/call` answers 422. call_frontend_tool then returns the errors to the Agent loop, and
+nothing reaches the browser.
+
+### 3. The agent asks, the user clicks
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant U as User
-  participant B as Browser
-  participant R as Bridge
-  participant K as Broker
-  participant P as call_frontend_tool
+  actor U as User
+  box rgba(120,120,120,0.12) Browser
+    participant SPA as Host SPA
+  end
+  box rgba(17,104,189,0.12) Hermes dashboard process
+    participant RT as agui router
+    participant BR as Broker
+  end
+  box rgba(8,66,123,0.12) Hermes gateway process
+    participant FT as call_frontend_tool
+  end
 
-  P->>K: broker/call ask_choice(question, options)
-  R-->>B: TOOL_CALL_* ask_choice, RUN_FINISHED
-  B->>U: renders the choice chips
-  Note over P,K: plugin keeps polling in 1 s slices (default limit 300 s, below Hermes' 420 s per-tool cap)
-  U->>B: clicks an option
-  B->>R: POST run with the tool message {choice}
-  R->>K: resolve
-  K-->>P: 200 {choice}
-  Note over B,R: if the user types a chat message instead, the pending call resolves as {status: user_replied} and the message is queued as the next turn
+  FT->>BR: broker/call ask_choice(question, options)
+  RT-->>SPA: TOOL_CALL_* ask_choice, RUN_FINISHED
+  SPA->>U: shows the choices
+  Note over FT,BR: keeps polling every 1 s, up to 300 s
+  U->>SPA: clicks an option
+  SPA->>RT: POST run with the tool result
+  RT->>BR: resolve
+  BR-->>FT: 200 choice
+  Note over SPA,RT: if the user types instead, the call resolves<br/>as user_replied and the message becomes the next turn
 ```
 
 ### 4. Stop
@@ -212,19 +280,26 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   autonumber
-  participant B as Browser
-  participant R as Bridge
-  participant H as Hermes API server
-  participant K as Broker
-  participant P as call_frontend_tool
+  box rgba(120,120,120,0.12) Browser
+    participant SPA as Host SPA
+  end
+  box rgba(17,104,189,0.12) Hermes dashboard process
+    participant RT as agui router
+    participant BR as Broker
+  end
+  box rgba(8,66,123,0.12) Hermes gateway process
+    participant API as Hermes API server
+    participant FT as call_frontend_tool
+  end
 
-  B->>R: POST agent/{surface}/stop/{threadId}
-  R->>H: POST /v1/runs/{id}/stop
-  R->>K: drop_session(session)
-  K-->>P: next poll returns 410 dropped
-  P->>P: tools.interrupt.is_interrupted() is true, so it exits within ~1 s
-  R-->>B: {stopped: true}, and an open stream closes its text and ends the run
-  Note over K: a late or duplicate tool result for this call is rejected
+  SPA->>RT: POST stop/{threadId}
+  RT->>API: POST /v1/runs/{id}/stop
+  RT->>BR: drop session
+  FT->>BR: GET broker/result
+  BR-->>FT: 410 dropped
+  Note over FT: sees the Hermes interrupt,<br/>exits within about 1 s
+  RT-->>SPA: stopped = true, open text closed, run ended
+  Note over BR: a late or duplicate result for that call is rejected
 ```
 
 ### 5. Reload: the chat comes back
@@ -232,15 +307,19 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   autonumber
-  participant B as Browser
-  participant R as Bridge
-  participant T as Transcript store
+  box rgba(120,120,120,0.12) Browser
+    participant SPA as Host SPA
+  end
+  box rgba(17,104,189,0.12) Hermes dashboard process
+    participant RT as agui router
+    participant TS as Transcript store
+  end
 
-  B->>B: page load restores threadId and form draft from localStorage (host UI)
-  B->>R: POST agent/{surface}/connect {threadId}
-  R->>T: messages(thread key)
-  R-->>B: RUN_STARTED, MESSAGES_SNAPSHOT [...], RUN_FINISHED
-  Note over B,R: no transcript means an empty run, and the chat starts fresh
+  Note over SPA: restores threadId + form draft<br/>from localStorage
+  SPA->>RT: POST connect (threadId)
+  RT->>TS: read messages for the thread
+  RT-->>SPA: RUN_STARTED, MESSAGES_SNAPSHOT, RUN_FINISHED
+  Note over SPA,RT: no transcript means an empty run and a fresh chat
 ```
 
 ### 6. The browser never answers
@@ -248,62 +327,46 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   autonumber
-  participant P as call_frontend_tool
-  participant K as Broker
-  participant M as Model
-
-  loop until timeout_s (default 300 s)
-    P->>K: GET broker/result
-    K-->>P: 204
+  box rgba(17,104,189,0.12) Hermes dashboard process
+    participant BR as Broker
   end
-  P-->>M: {status: "no_response"}
-  Note over M: the model continues (e.g. asks in chat), and a result arriving later is rejected by the broker
+  box rgba(8,66,123,0.12) Hermes gateway process
+    participant FT as call_frontend_tool
+    participant AG as Agent loop
+  end
+
+  loop every 1 s for up to 300 s
+    FT->>BR: GET broker/result
+    BR-->>FT: 204 pending
+  end
+  FT-->>AG: status no_response
+  Note over AG: the agent carries on, e.g. asks in chat
 ```
+
+300 s is the default `timeout_s`, which stays under Hermes' 420 s per-tool limit.
 
 ## Security model
 
-- **Authorization is the host's job.** Every route calls `Surface.authorize(request)` with the host's own session and
-  CSRF checks. Client `context[]` is data for the prompt and never grants access.
-- **Frontend tool args are validated server-side** against the surface's `FrontendToolSpec` schemas. CopilotKit's
-  zod-to-JSON-schema conversion is lossy, so the server schemas win. An invalid call returns the errors to the model
-  instead of reaching the browser.
-- **The broker is loopback-only** and protected by a bearer token: `AGUI_BROKER_TOKEN` in the profile `.env`, compared
-  in constant time. Hosts must never route `broker/*` through the public edge.
-- **The agent never commits.** Creating or saving is a human click in the host UI. Frontend tools only change local
-  form state.
-- **Session ids are prefixed per surface**, so threads can't collide across surfaces or profiles on a multiplexed
-  gateway.
+- **The Surface decides access.** Every route calls `authorize` with the host's own session and CSRF checks. The
+  browser's `context` is prompt data only and never grants access.
+- **Frontend tool args are checked on the server** against the Surface's schemas. CopilotKit's zod-to-JSON-schema
+  conversion is lossy, so the server schemas win.
+- **The Broker's HTTP routes are loopback-only** and need a bearer token: `AGUI_BROKER_TOKEN` in the profile `.env`,
+  compared in constant time. The Edge proxy must never expose `broker/*`.
+- **The agent never commits.** Create and Save are human clicks in the Host SPA. Frontend tools only change the form
+  in the browser.
+- **Session ids carry the Surface id**, so threads can't collide across surfaces or profiles.
 
-## Edge requirements
+## Edge proxy requirements
 
-- Send headers and `RUN_STARTED` immediately. Some auth proxies return 502 when headers take more than about 30 s.
-- Keep the SSE heartbeat (every 10 s) under the shortest idle timeout on the path: nginx defaults to 60 s, and CDNs
-  commonly allow about 100–125 s.
-- Serve the run/connect paths with proxy buffering off and a long read timeout. Allow-list exact paths. Stop needs a
-  pattern match because of `{threadId}`.
+- Response headers and `RUN_STARTED` go out at once. Some auth proxies return 502 when headers take more than about 30 s.
+- The 10 s heartbeat must stay under the shortest idle timeout on the path: nginx defaults to 60 s, and CDNs commonly
+  allow about 100–125 s.
+- Run and connect paths need proxy buffering off and a long read timeout. Allow-list exact paths; stop needs a pattern
+  match because of `{threadId}`.
 
-## Deployment
+## Install
 
-```mermaid
-flowchart LR
-  subgraph Browser
-    SPA["Host SPA + CopilotKit v2"]
-  end
-  subgraph Edge
-    PX["Reverse proxy + auth\n(exact-path allowlist, SSE: buffering off)"]
-  end
-  subgraph HostProc["Host process (e.g. Hermes dashboard)"]
-    HP["Host plugin"] --> LIB["hermes_agui (pinned git dependency)"]
-    LIB --> DB[("transcripts.sqlite")]
-  end
-  subgraph Gateway["Hermes gateway"]
-    API["API server /p/&lt;profile&gt;/v1/runs"]
-    PL["agui_frontend plugin\n(enabled only on &lt;profile&gt;)"]
-  end
-  SPA -- "HTTPS + SSE" --> PX --> HP
-  LIB -- "HTTP + SSE, API key" --> API
-  PL -- "loopback HTTP, AGUI_BROKER_TOKEN" --> LIB
-```
-
-Install steps and the tested packaging options are in [`docs/packaging.md`](docs/packaging.md). The design history and
-spike evidence are in [`docs/design/`](docs/design/).
+Both pieces are pinned to the same commit. The host plugin declares `hermes-agui` as a pinned git dependency, and the
+gateway plugin is installed on the serving profile. Details and the packaging options tested are in
+[`docs/packaging.md`](docs/packaging.md); the design history is in [`docs/design/`](docs/design/).
