@@ -1,0 +1,29 @@
+--- enable
+Preparing the isolated Hermes runtime…
+  → Installing Python dependencies…
+  ✓ Installing Python dependencies
+  → Installing Python dependencies…
+  ✓ Installing Python dependencies
+✓ Plugin agui_host_probe enabled.
+dashboard binary: /Users/ejlevin1/hermes-agui-work/proof/homes/1d/installs/cd3f93267711b284/environments/03b4e5c758d0455faaee49c5b378fbc6/venv/bin/hermes
+--- report (1d)
+{
+    "python": "/Users/ejlevin1/hermes-agui-work/proof/homes/1d/installs/cd3f93267711b284/environments/03b4e5c758d0455faaee49c5b378fbc6/venv/bin/python",
+    "version": "3.14.9",
+    "hermes_agui": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'hermes_agui'"
+    },
+    "hermes_agui_plugin": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'hermes_agui_plugin'"
+    },
+    "agui_frontend": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'agui_frontend'"
+    },
+    "agui_modules": [
+        "hermes_dashboard_plugin_agui_host_probe",
+        "hermes_plugins.agui_host_probe"
+    ]
+}

@@ -1,0 +1,3 @@
+name: agui_frontend
+version: 0.0.1
+description: "Stand-in gateway plugin (real one is built by the plugin lane): registers call_frontend_tool in toolset agui_frontend."

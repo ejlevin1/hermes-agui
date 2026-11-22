@@ -1,0 +1,19 @@
+✓ Plugin agui_host_probe enabled.
+envs: 1
+v1 in env: 0.0.1
+On branch standin
+nothing to commit, working tree clean
+bumping rev c9097478bb18ccd760852030c88ad98b4a565a2d -> a381f30f883a412e1fd077df2caf2ee70f2ad824
+$ hermes pm install
+  ✓ Installing Python dependencies
+✓ venv
+✓ chromium
+✓ cua-driver
+envs:
+       2
+$ hermes plugins disable+enable agui_host_probe
+  hermes gateway restart
+  → Installing Python dependencies…
+  ✓ Installing Python dependencies
+✓ Plugin agui_host_probe enabled.
+after re-enable (current env): 0.0.2 | ag-ui-protocol 0.1.22

@@ -1,12 +1,19 @@
 [project]
 name = "hermes-agui"
-version = "0.0.1"
+version = "0.1.0"
 description = "AG-UI / CopilotKit runtime bridge and frontend tools for Hermes Agent"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+  # S8 used ag-ui-protocol 1.0.0 (event models + EventEncoder).
+  "ag-ui-protocol==1.0.0",
+  # Hermes dashboard plugins mount a FastAPI APIRouter; same range as Hermes core (pyproject @84e3e72bbb).
+  "fastapi>=0.104.0,<1",
+  "httpx>=0.27,<1",
+  "jsonschema>=4,<5",
+]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "anyio>=4", "uvicorn"]
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,3 @@
+name: agui_host_probe
+version: 0.0.1
+description: "Import-proof stand-in for a host dashboard plugin that wants to import hermes_agui. Throwaway."
