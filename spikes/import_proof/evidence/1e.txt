@@ -1,0 +1,35 @@
+--- enable
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ejlevin1/hermes-agui-work/proof/hermes-src/hermes_cli/plugins_cmd.py", line 765, in cmd_enable
+    changed = _activate_key(key, enable=True, console=console)
+  File "/Users/ejlevin1/hermes-agui-work/proof/hermes-src/hermes_cli/plugins_cmd.py", line 592, in _activate_key
+    _set_plugin_enabled(key, enable=enable, aliases=aliases, console=console)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ejlevin1/hermes-agui-work/proof/hermes-src/hermes_cli/plugins_cmd.py", line 663, in _set_plugin_enabled
+    _admit_and_save_plugin_sets(enabled, disabled, console=console,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               action=f"{'Enable' if enable else 'Disable'} '{name}'",
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               expected_config=expected_config, plugin=name if enable else None,
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                               settled=(name, *aliases))
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/ejlevin1/hermes-agui-work/proof/hermes-src/hermes_cli/plugins_cmd.py", line 523, in _admit_and_save_plugin_sets
+    admit_plugin_set_change(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        enabled, disabled, active_plugins_dir=_plugins_dir(), extra_dirs=extra_dirs, expected_config=expected_config,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        plugin=plugin, settled=settled,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/Users/ejlevin1/hermes-agui-work/proof/hermes-src/hermes_cli/plugins_admission.py", line 82, in admit_plugin_set_change
+    raise DependencyConflict(exc.cause, plugin=plugin) from exc
+hermes_cli.plugins_admission.DependencyConflict: Plugin 'agui_host_probe' conflicts with the dependencies pinned by Hermes core or an enabled plugin, so it was not admitted. Resolver: uv lock exited 1: til.git (380bd2b59c67b0e1b04bbf3a90b11744f4f96644)
+error: No solution found when resolving dependencies for split (markers: python_full_version == '3.14.*' and sys_platform != 'android')
+  cause: Because hermes-agui was not found in the package registry and hermes-plugin-agui-host-probe-681b9e8a3fe9414c depends on hermes-agui==0.0.1, we can conclude that hermes-plugin-agui-host-probe-681b9e8a3fe9414c's requirements are unsatisfiable.
+         And because your workspace requires hermes-plugin-agui-host-probe-681b9e8a3fe9414c, we can conclude that your workspace's requirements are unsatisfiable.
+managed_venv:1: no matches found: /Users/ejlevin1/hermes-agui-work/proof/homes/1e/installs/*/environments/*/venv
+dashboard binary: /Users/ejlevin1/hermes-agui-work/proof/venv/bin/hermes
+--- report (1e)
+NO REPORT (host plugin_api.py never imported)

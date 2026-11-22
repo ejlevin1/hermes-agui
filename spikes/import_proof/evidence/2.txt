@@ -1,0 +1,50 @@
+$ hermes plugins install file://<repo>#plugin --ref c9097478bb18ccd760852030c88ad98b4a565a2d --enable
+Warning: custom (unreviewed) source — not from the Hermes catalog.
+Warning: Using insecure/local URL scheme. Consider using https:// or git@ for 
+production installs.
+Cloning file:///Users/ejlevin1/hermes-agui-work/proof/repo-standin (subdir: 
+plugin)...
+Preparing the isolated Hermes runtime…
+  → Installing Python dependencies…
+  ✓ Installing Python dependencies
+
+╭──────────────────────────────── ✓ Installed ─────────────────────────────────╮
+│ Plugin installed:                                                            │
+│ file:///Users/ejlevin1/hermes-agui-work/proof/repo-standin#plugin            │
+│ Location:                                                                    │
+│ /Users/ejlevin1/hermes-agui-work/proof/homes/2/plugins/agui_frontend         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+  → Installing Python dependencies…
+  ✓ Installing Python dependencies
+✓ Plugin agui_frontend enabled.
+
+--- ls plugins
+agui_frontend
+agui_host_probe
+--- enable host
+  → Installing Python dependencies…
+  ✓ Installing Python dependencies
+✓ Plugin agui_host_probe enabled.
+enabled      git pinned@c9097478 0.0.1    agui_frontend
+enabled      user     0.0.1    agui_host_probe
+dashboard binary: /Users/ejlevin1/hermes-agui-work/proof/homes/2/installs/cd3f93267711b284/environments/4cbbbefab83349aa8ff73147fad7f4e1/venv/bin/hermes
+{
+    "hermes_agui": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'hermes_agui'"
+    },
+    "hermes_agui_plugin": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'hermes_agui_plugin'"
+    },
+    "agui_frontend": {
+        "ok": false,
+        "error": "ModuleNotFoundError: No module named 'agui_frontend'"
+    },
+    "agui_modules": [
+        "hermes_dashboard_plugin_agui_host_probe",
+        "hermes_plugins.agui_frontend",
+        "hermes_plugins.agui_host_probe"
+    ]
+}

@@ -1,0 +1,2 @@
+{"name": "agui_host_probe", "label": "AGUI Probe", "description": "import proof", "icon": "Package",
+ "version": "0.0.1", "tab": {"path": "/agui-probe", "position": "end"}, "api": "plugin_api.py"}

@@ -1,0 +1,6 @@
+profile A: plugins dir = agui_frontend | enabled      git pinned@c9097478 0.0.1    agui_frontend
+profile A tools: {"call_frontend_tool_offered": true, "n_tools": 33}
+profile B: plugins dir = agui_frontend | not enabled  git pinned@c9097478 0.0.1    agui_frontend
+profile B tools: {"call_frontend_tool_offered": false, "n_tools": 33}
+profile C: plugins dir = | agui_frontend: not listed
+profile C tools: {"call_frontend_tool_offered": false, "n_tools": 33}
