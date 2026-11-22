@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from hermes_agui.broker import MemoryBroker, broker_router
 from hermes_agui.hermes_client import HttpHermesClient
-from hermes_agui.runtime import make_router
+from hermes_agui.runtime import HEARTBEAT_S, make_router
 from hermes_agui.store import InMemoryTranscriptStore
 from hermes_agui.surface import (
     FrontendToolSpec,
@@ -248,7 +248,7 @@ def main() -> None:
     ap.add_argument("--api-key", required=True)
     ap.add_argument("--token", required=True)
     ap.add_argument("--static", default="")
-    ap.add_argument("--heartbeat-s", type=float, default=15.0)
+    ap.add_argument("--heartbeat-s", type=float, default=HEARTBEAT_S)
     args = ap.parse_args()
     uvicorn.run(build(args), host="127.0.0.1", port=args.port, log_level="warning")
 
