@@ -35,7 +35,7 @@ CACHE = (
 )
 PY = str(CACHE / "venv" / "bin" / "python")
 PROFILE = "agui-test"
-API_KEY = "e2e-api-key-0123456789abcdef-synthetic"  # synthetic, local only
+API_KEY = "e2e-synthetic-key"  # synthetic, local only
 BROKER_TOKEN = "e2e-broker-token-synthetic"
 
 

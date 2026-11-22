@@ -5,10 +5,10 @@ Preparing the isolated Hermes runtime…
   → Installing Python dependencies…
   ✓ Installing Python dependencies
 ✓ Plugin agui_host_probe enabled.
-dashboard binary: /Users/ejlevin1/hermes-agui-work/proof/homes/1d/installs/cd3f93267711b284/environments/03b4e5c758d0455faaee49c5b378fbc6/venv/bin/hermes
+dashboard binary: ~/hermes-agui-work/proof/homes/1d/installs/<hash>/environments/<hash>/venv/bin/hermes
 --- report (1d)
 {
-    "python": "/Users/ejlevin1/hermes-agui-work/proof/homes/1d/installs/cd3f93267711b284/environments/03b4e5c758d0455faaee49c5b378fbc6/venv/bin/python",
+    "python": "~/hermes-agui-work/proof/homes/1d/installs/<hash>/environments/<hash>/venv/bin/python",
     "version": "3.14.9",
     "hermes_agui": {
         "ok": false,

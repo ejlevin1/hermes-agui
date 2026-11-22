@@ -9,7 +9,7 @@ every call through `hx`, which refuses outside `$W/homes/`).
 ```sh
 W=~/hermes-agui-work/proof; mkdir -p $W && cd $W
 rsync -a --exclude __pycache__ --exclude .git --exclude node_modules --exclude '/venv*' --exclude '/.venv' \
-  ~/Development/_ref/hermes-agent-84e3e72bbb/ hermes-src/
+  <hermes-src>/ hermes-src/
 uv venv -q -p 3.14 venv; echo "pillow==12.3.0" > ov.txt
 uv pip install -q -p venv/bin/python --override ov.txt -e './hermes-src[mcp,web]'
 # stand-in "repo with a plugin/ subdir" (the real plugin/ is built by another lane): clone + commit the stub

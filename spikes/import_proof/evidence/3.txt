@@ -1,11 +1,11 @@
-env before: /Users/ejlevin1/hermes-agui-work/proof/homes/3/installs/cd3f93267711b284/environments/33abe25787d945c6b6d258d5b65911a3/venv
-$ uv pip install -p <managed>/bin/python /Users/ejlevin1/Development/hermes-agui.wt/agui-010-proof
-importable in env: /Users/ejlevin1/hermes-agui-work/proof/homes/3/installs/cd3f93267711b284/environments/33abe25787d945c6b6d258d5b65911a3/venv/lib/python3.14/site-packages/hermes_agui/__init__.py
+env before: ~/hermes-agui-work/proof/homes/3/installs/<hash>/environments/<hash>/venv
+$ uv pip install -p <managed>/bin/python ~/Development/hermes-agui.wt/agui-010-proof
+importable in env: ~/hermes-agui-work/proof/homes/3/installs/<hash>/environments/<hash>/venv/lib/python3.14/site-packages/hermes_agui/__init__.py
   ✓ Installing Python dependencies
 ✓ Plugin dep2plug enabled.
 envs now:
-/Users/ejlevin1/hermes-agui-work/proof/homes/3/installs/cd3f93267711b284/environments/33abe25787d945c6b6d258d5b65911a3/venv
-/Users/ejlevin1/hermes-agui-work/proof/homes/3/installs/cd3f93267711b284/environments/3e57231b9181465fa0384ab775030400/venv
+~/hermes-agui-work/proof/homes/3/installs/<hash>/environments/<hash>/venv
+~/hermes-agui-work/proof/homes/3/installs/<hash>/environments/<hash>/venv
 33abe25787d945c6b6d258d5b65911a3: hermes_agui present
 3e57231b9181465fa0384ab775030400: ModuleNotFoundError: No module named 'hermes_agui'
 $ hermes pm repair

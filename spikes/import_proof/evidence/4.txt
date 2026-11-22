@@ -8,10 +8,10 @@ Preparing the isolated Hermes runtime…
   → Installing Python dependencies…
   ✓ Installing Python dependencies
 ✓ Plugin agui_host_probe enabled.
-dashboard binary: /Users/ejlevin1/hermes-agui-work/proof/homes/4/installs/cd3f93267711b284/environments/518c93d98d0c41efb5d73b233d90824f/venv/bin/hermes
+dashboard binary: ~/hermes-agui-work/proof/homes/4/installs/<hash>/environments/<hash>/venv/bin/hermes
 --- report (4)
 {
-    "python": "/Users/ejlevin1/hermes-agui-work/proof/homes/4/installs/cd3f93267711b284/environments/518c93d98d0c41efb5d73b233d90824f/venv/bin/python",
+    "python": "~/hermes-agui-work/proof/homes/4/installs/<hash>/environments/<hash>/venv/bin/python",
     "version": "3.14.9",
     "hermes_agui": {
         "ok": false,
@@ -27,13 +27,13 @@ dashboard binary: /Users/ejlevin1/hermes-agui-work/proof/homes/4/installs/cd3f93
     },
     "hermes_plugins.agui_host_probe.vendor.hermes_agui": {
         "ok": true,
-        "file": "/Users/ejlevin1/hermes-agui-work/proof/homes/4/plugins/agui_host_probe/vendor/hermes_agui/__init__.py",
+        "file": "~/hermes-agui-work/proof/homes/4/plugins/agui_host_probe/vendor/hermes_agui/__init__.py",
         "version": "0.0.1"
     },
     "vendor_dir_exists": true,
     "vendor_syspath": {
         "ok": true,
-        "file": "/Users/ejlevin1/hermes-agui-work/proof/homes/4/plugins/agui_host_probe/vendor/hermes_agui/__init__.py",
+        "file": "~/hermes-agui-work/proof/homes/4/plugins/agui_host_probe/vendor/hermes_agui/__init__.py",
         "relative_import_ok": true
     },
     "agui_modules": [

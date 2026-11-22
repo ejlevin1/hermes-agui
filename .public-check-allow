@@ -1,2 +1,4 @@
 # Narrow regexes for lines that legitimately match a system-info pattern (matched against the whole line).
 # Keep each one specific and explain it.
+# git@github.com ssh clone URL, not a personal email (false positive of the email pattern)
+ssh://git@github\.com/ejlevin1/hermes-agui\.git
