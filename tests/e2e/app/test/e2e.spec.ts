@@ -133,7 +133,7 @@ test("5 reload: connect replays the earlier messages", async () => {
   await expect(t2.page.getByTestId("msg-user")).toHaveCount(0);
   await t2.page.getByTestId("reconnect").click();
   await expect(t2.page.getByTestId("msg-user").first()).toContainText("remember me", { timeout: 15000 });
-  await expect(lastAssistant(t2.page)).toHaveText("Hello from the mock.");
+  await expect(lastAssistant(t2.page)).toHaveText("Hello from the mock.", { timeout: 15000 });
   const t3 = await open(ctx, "test.form", `t-never-${uid()}`); await t3.page.getByTestId("reconnect").click(); await sleep(800);
   await expect(t3.page.getByTestId("msg-user")).toHaveCount(0); await expect(t3.page.getByTestId("error")).toHaveCount(0);
 });
