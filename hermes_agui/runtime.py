@@ -445,10 +445,13 @@ def make_router(
                     break
 
             # turn over (completed, failed, stopped or nothing left to run)
-            for ev in tr.close():
-                yield sse(ev)
+            closing = list(tr.close())
+            # store before yielding: a client that disconnects on the final
+            # event must not lose the reply it already saw (D7)
             for m in tr.drain_messages():
                 store.append(sid, m)
+            for ev in closing:
+                yield sse(ev)
             entry.streaming = False
             await teardown(entry, stop_hermes=False)
             clean = True
@@ -460,7 +463,10 @@ def make_router(
                 entry.streaming = False
                 with contextlib.suppress(Exception):
                     await teardown(entry, stop_hermes=True)
-            for ev in tr.fail(f"{type(exc).__name__}: {exc}"):
+            failing = list(tr.fail(f"{type(exc).__name__}: {exc}"))
+            for m in tr.drain_messages():
+                store.append(sid, m)
+            for ev in failing:
                 yield sse(ev)
             clean = True
         finally:
@@ -468,6 +474,10 @@ def make_router(
                 not clean and entry is not None
             ):  # client went away mid-stream: abandon the Hermes run
                 entry.streaming = False
+                with contextlib.suppress(Exception):
+                    tr.close()
+                    for m in tr.drain_messages():
+                        store.append(sid, m)
                 with contextlib.suppress(Exception, asyncio.CancelledError):
                     await asyncio.shield(teardown(entry, stop_hermes=True))
 

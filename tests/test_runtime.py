@@ -830,3 +830,13 @@ def test_sqlite_store_roundtrip_and_persistence(tmp_path):
     s2 = SqliteTranscriptStore(p)
     assert [m["id"] for m in s2.messages("k1")] == ["1", "3"]
     s2.close()
+
+
+async def test_reply_is_stored_on_close_and_on_error(env):
+    t = await run_task(env, [user("hi")])
+    await wait_started(env)
+    env.hermes.push("run_h1", delta("Hello"), done(output="Hello"))
+    await t
+    assert {"role": "assistant", "content": "Hello"} in [
+        {k: m[k] for k in ("role", "content")} for m in env.store.messages(env.sid)
+    ]
