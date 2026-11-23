@@ -45,6 +45,11 @@ async function rawRun(surface: string, body: Ev, onChunk?: (t: number, s: string
   for (;;) { const { done, value } = await reader.read(); if (done) break; const s = dec.decode(value); text += s; onChunk?.(Date.now() - t0, s); }
   return { status: r.status, text, ms: Date.now() - t0 };
 }
+/** POST /connect: the replayed transcript (SSE text) for a thread. */
+async function connect(tid: string) {
+  const r = await fetch(`${BASE}/api/copilotkit/agent/test.form/connect`, { method: "POST", headers: { ...HDR, "content-type": "application/json" }, body: JSON.stringify({ threadId: tid, runId: `c-${uid()}` }) });
+  return r.text();
+}
 const userMsg = (text: string) => ({ id: `m-${uid()}`, role: "user", content: text });
 const runBody = (tid: string, messages: Ev[]) => ({ threadId: tid, runId: `r-${uid()}`, state: {}, messages, tools: [], context: [], forwardedProps: {} });
 
@@ -128,12 +133,15 @@ test("5 reload: connect replays the earlier messages", async () => {
   const tid = `t-reload-${uid()}`; const t = await open(ctx, "test.form", tid);
   await say(t.page, "[[SC:text]] remember me");
   await expect(lastAssistant(t.page)).toHaveText("Hello from the mock.", { timeout: 30000 });
+  await expect(t.page.getByTestId("running")).toHaveCount(0, { timeout: 15000 }); await sleep(500); // let the bridge finish the run (store the reply) before the client goes away
   await t.page.close();
+  // connect replays the bridge's transcript store: wait until the assistant reply is stored too
+  await expect.poll(() => connect(tid), { timeout: 15000 }).toContain("Hello from the mock.");
   const t2 = await open(ctx, "test.form", tid);                    // fresh page: client has nothing
   await expect(t2.page.getByTestId("msg-user")).toHaveCount(0);
   await t2.page.getByTestId("reconnect").click();
   await expect(t2.page.getByTestId("msg-user").first()).toContainText("remember me", { timeout: 15000 });
-  await expect(lastAssistant(t2.page)).toHaveText("Hello from the mock.");
+  await expect(lastAssistant(t2.page)).toHaveText("Hello from the mock.", { timeout: 15000 });
   const t3 = await open(ctx, "test.form", `t-never-${uid()}`); await t3.page.getByTestId("reconnect").click(); await sleep(800);
   await expect(t3.page.getByTestId("msg-user")).toHaveCount(0); await expect(t3.page.getByTestId("error")).toHaveCount(0);
 });
