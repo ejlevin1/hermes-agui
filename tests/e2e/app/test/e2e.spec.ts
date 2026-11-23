@@ -128,7 +128,10 @@ test("5 reload: connect replays the earlier messages", async () => {
   const tid = `t-reload-${uid()}`; const t = await open(ctx, "test.form", tid);
   await say(t.page, "[[SC:text]] remember me");
   await expect(lastAssistant(t.page)).toHaveText("Hello from the mock.", { timeout: 30000 });
+  await expect(t.page.getByTestId("running")).toHaveCount(0, { timeout: 15000 }); await sleep(500); // let the bridge finish the run (store the reply) before the client goes away
   await t.page.close();
+  // connect replays a one-shot snapshot of what Hermes has persisted: wait until the assistant reply is stored too
+  await expect.poll(async () => (await fetch(`${BASE}/api/copilotkit/agent/test.form/connect`, { method: "POST", headers: { ...HDR, "content-type": "application/json" }, body: JSON.stringify({ threadId: tid, runId: `c-${uid()}` }) })).text(), { timeout: 15000 }).toContain("Hello from the mock.");
   const t2 = await open(ctx, "test.form", tid);                    // fresh page: client has nothing
   await expect(t2.page.getByTestId("msg-user")).toHaveCount(0);
   await t2.page.getByTestId("reconnect").click();
