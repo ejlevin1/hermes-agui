@@ -356,6 +356,8 @@ sequenceDiagram
 - **The agent never commits.** Create and Save are human clicks in the Host SPA. Frontend tools only change the form
   in the browser.
 - **Session ids carry the Surface id**, so threads can't collide across surfaces or profiles.
+- **Secrets (`AGUI_BROKER_TOKEN`) are read through the Hermes profile secret scope**, never `os.environ`: a
+  multiplexed gateway never puts a profile's `.env` into the process environment.
 
 ## Edge proxy requirements
 
