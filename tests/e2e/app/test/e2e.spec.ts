@@ -200,3 +200,25 @@ test("9 stop during a human wait does not cost another model call", async () => 
   console.log(`model calls: before stop=${before} after stop+4s=${mockReqs().length}`);
   expect(mockReqs().length).toBe(before);                          // the cancelled tool result must not trigger another LLM turn
 });
+
+// Runs only on the multiplexed stack (run.sh phase 2: `stack.py start --multiplex`): one gateway process serves the
+// default profile and `agui-test`; AGUI_BROKER_TOKEN is ONLY in agui-test's .env, never in the gateway's process env.
+test("10 multiplexed gateway: frontend tool across two runs via /p/agui-test, token only in the profile .env", async () => {
+  test.skip(!ST.multiplex, "needs the multiplexed stack (stack.py start --multiplex)");
+  expect(ST.token_in_gateway_env).toBe(false);
+  const tid = `t-mux-${uid()}`; const t = await open(ctx, "test.form", tid); const sid = sidOf("test.form", tid);
+  await say(t.page, "[[SC:fill]] fill it");
+  await expect(t.page.getByTestId("f-title")).toHaveValue("Dune", { timeout: 30000 });
+  await expect(t.page.getByTestId("f-year")).toHaveValue("1965");
+  await expect(lastAssistant(t.page)).toContainText('"bogus": "unknown_field"', { timeout: 30000 });
+  expect(t.runs.length).toBe(2);
+  expect(JSON.parse(t.runs[1].messages.at(-1).content)).toEqual({ title: "ok", year: "ok", bogus: "unknown_field" });
+  const log = await dbgFor(sid);
+  expect(log.find((e) => e.ev === "register_call")).toMatchObject({ name: "set_fields", errors: null });
+  expect(log.find((e) => e.ev === "resolve")).toMatchObject({ accepted: true });
+  // both AG-UI runs are served by ONE Hermes run (the 2nd delivers the tool result via the broker); every Hermes
+  // request of this stack went through the multiplexed profile route
+  const http = (await dbg()).filter((e) => e.ev === "hermes_http");
+  expect(http.filter((e) => e.method === "POST" && e.path === "/p/agui-test/v1/runs").length).toBeGreaterThanOrEqual(1);
+  for (const e of http) expect(e.path.startsWith("/p/agui-test/v1/runs")).toBe(true);
+});

@@ -8,6 +8,12 @@ blocked; Hermes' default per-tool cap is 420 s, so we answer ``no_response`` at 
 Config (Hermes policy: behaviour in config.yaml, secrets in the profile ``.env``):
 ``plugins.entries.agui_frontend.settings.broker_url`` (e.g. ``http://127.0.0.1:9119/api/plugins/<host>/agui``),
 ``...settings.timeout_s`` (default 300); secret ``AGUI_BROKER_TOKEN`` in the profile ``.env``.
+
+Multiplexed gateways (``gateway.multiplex_profiles``) serve many profiles from one process and never union a
+profile's ``.env`` into ``os.environ``; the active profile's secrets live in a per-task scope read through
+``agent.secret_scope.get_secret``. So the token is read through :func:`read_secret` on every call (never cached);
+``os.environ`` is used only when Hermes is not importable (unit tests, outside Hermes). ``ctx.get_config`` already
+reads the active profile's ``config.yaml`` (Hermes resolves the home per task).
 """
 
 from __future__ import annotations
@@ -60,6 +66,28 @@ def _is_interrupted() -> bool:
     from tools.interrupt import is_interrupted
 
     return is_interrupted()
+
+
+class SecretUnavailable(Exception):
+    """The secret cannot be read in this context (multiplexed gateway, no profile scope)."""
+
+
+def read_secret(name: str) -> str:
+    """Value of secret ``name`` for the active Hermes profile, ``""`` when unset.
+
+    Uses ``agent.secret_scope.get_secret`` (profile-scoped; raises when multiplexing has no scope: re-raised
+    as :class:`SecretUnavailable`, message without the value). Falls back to ``os.environ`` only when that
+    module is not importable. Not cached: the scope is per task."""
+    try:
+        from agent.secret_scope import get_secret
+    except ImportError:
+        return os.environ.get(name, "")
+    try:
+        return get_secret(name, "") or ""
+    except (
+        Exception
+    ) as e:  # UnscopedSecretError (RuntimeError) under multiplex without scope
+        raise SecretUnavailable(type(e).__name__) from None
 
 
 def _request(
@@ -156,10 +184,16 @@ def run_call(
             time.sleep(_SLICE_S)
 
 
-def make_handler(get_config: Callable[[str, Any], Any]) -> Callable[..., str]:
+def make_handler(
+    get_config: Callable[[str, Any], Any],
+    secret: Callable[[str], str] = read_secret,
+) -> Callable[..., str]:
     def call_frontend_tool(args: dict, **_kwargs: Any) -> str:
         url = get_config("broker_url", "")
-        token = os.environ.get(TOKEN_ENV, "")
+        try:
+            token = secret(TOKEN_ENV)
+        except SecretUnavailable:
+            token = ""
         if not url or not token:
             return json.dumps(
                 {

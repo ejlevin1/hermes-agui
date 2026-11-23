@@ -174,21 +174,25 @@ class OtherSurface(TestSurface):
 
 
 class StripProfile(httpx.AsyncBaseTransport):
-    """The e2e Hermes gateway serves one profile on its own port (no /p/<profile>/ multiplexing): drop the prefix."""
+    """Single-profile e2e gateway (own port, no /p/<profile>/ multiplexing): drop the prefix. With
+    ``strip=False`` (multiplexed gateway, ``stack.py start --multiplex``) the path goes out unchanged. Either way
+    the path as sent is logged (``hermes_http``) so the spec can prove which route served the run."""
 
-    def __init__(self) -> None:
+    def __init__(self, strip: bool = True) -> None:
         self._t = httpx.AsyncHTTPTransport()
+        self._strip = strip
 
     async def handle_async_request(self, request):
         prefix = f"/p/{PROFILE}"
         p = request.url.path
-        if p.startswith(prefix):
+        if self._strip and p.startswith(prefix):
             request.url = request.url.copy_with(
                 raw_path=(
                     p[len(prefix) :]
                     + ("?" + request.url.query.decode() if request.url.query else "")
                 ).encode()
             )
+        note("hermes_http", method=request.method, path=request.url.path)
         return await self._t.handle_async_request(request)
 
     async def aclose(self):
@@ -201,7 +205,8 @@ def build(args) -> FastAPI:
     registry.register(OtherSurface())
     broker = LoggingBroker()
     client = httpx.AsyncClient(
-        transport=StripProfile(), timeout=httpx.Timeout(30.0, read=60.0)
+        transport=StripProfile(strip=not args.multiplex),
+        timeout=httpx.Timeout(30.0, read=60.0),
     )
     hermes = LoggingHermes(args.hermes_url, args.api_key, client=client)
     app = FastAPI()
@@ -249,6 +254,11 @@ def main() -> None:
     ap.add_argument("--token", required=True)
     ap.add_argument("--static", default="")
     ap.add_argument("--heartbeat-s", type=float, default=HEARTBEAT_S)
+    ap.add_argument(
+        "--multiplex",
+        action="store_true",
+        help="Hermes multiplexes profiles: send /p/<profile>/ paths unchanged",
+    )
     args = ap.parse_args()
     uvicorn.run(build(args), host="127.0.0.1", port=args.port, log_level="warning")
 
