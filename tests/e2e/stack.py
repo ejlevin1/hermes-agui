@@ -109,17 +109,29 @@ def install_plugin(home: Path, state: dict) -> None:
     )
 
 
-def start(statefile: Path, static: str) -> None:
+def start(statefile: Path, static: str, multiplex: bool = False) -> None:
+    """Start mock LLM, Hermes gateway, host app.
+
+    Default: one profile (``agui-test``) is the gateway's HERMES_HOME. ``multiplex``: the gateway runs with
+    ``gateway.multiplex_profiles: true`` from a root home (the default profile) and serves ``agui-test`` from
+    ``<root>/profiles/agui-test`` at ``/p/agui-test/``; the broker token is ONLY in that profile's ``.env``
+    (never in the process env), as on a live multiplexed gateway."""
     if not (Path(PY).exists() and (CACHE / ".ready").exists()):
         raise SystemExit("hermes venv missing: run tests/e2e/setup_hermes.sh")
     shutil.rmtree(WORK, ignore_errors=True)
     (WORK / "logs").mkdir(parents=True)
-    state: dict = {"pids": {}, "work": str(WORK), "api_key": API_KEY}
+    state: dict = {
+        "pids": {},
+        "work": str(WORK),
+        "api_key": API_KEY,
+        "multiplex": multiplex,
+    }
     statefile.write_text(json.dumps(state))
     try:
         mock_port, hermes_port, host_port = free_port(), free_port(), free_port()
         mock_log = WORK / "logs" / "mock_requests.jsonl"
-        home = WORK / "profiles" / PROFILE
+        root = WORK / "root" if multiplex else None
+        home = (root / "profiles" / PROFILE) if root else (WORK / "profiles" / PROFILE)
         (home / "plugins").mkdir(parents=True)
         state.update(
             mock_port=mock_port,
@@ -127,6 +139,7 @@ def start(statefile: Path, static: str) -> None:
             host_port=host_port,
             mock_log=str(mock_log),
             hermes_home=str(home),
+            gateway_home=str(root or home),
         )
         spawn(
             state,
@@ -160,32 +173,57 @@ def start(statefile: Path, static: str) -> None:
             },
             "tools": {"tool_search": {"enabled": "off"}},
             "terminal": {"backend": "local"},
-            "gateway": {"standalone": True},
+            # standalone: a profile with this flag is NOT served by a multiplexing gateway
+            "gateway": {} if multiplex else {"standalone": True},
         }
         (home / "config.yaml").write_text(
             json.dumps(cfg, indent=1)
         )  # JSON is valid YAML
-        (home / ".env").write_text(f"AGUI_BROKER_TOKEN={BROKER_TOKEN}\n")
-        assert_home_safe(home)
+        env_lines = f"AGUI_BROKER_TOKEN={BROKER_TOKEN}\n"
+        if root:
+            # a named profile's API key comes from ITS scope (api_server._expected_api_key)
+            env_lines += f"API_SERVER_KEY={API_KEY}\n"
+            root_cfg = {
+                k: v
+                for k, v in cfg.items()
+                if k not in ("plugins", "platform_toolsets")
+            }
+            root_cfg["gateway"] = {"multiplex_profiles": True}
+            (root / "config.yaml").write_text(json.dumps(root_cfg, indent=1))
+            (root / ".env").write_text("")  # default profile: no broker token
+        (home / ".env").write_text(env_lines)
+        gw_home = root or home
+        assert_home_safe(gw_home)
         install_plugin(home, state)
+        gw_env = hermes_env(
+            gw_home,
+            {
+                "API_SERVER_ENABLED": "true",
+                "API_SERVER_KEY": API_KEY,
+                "API_SERVER_PORT": str(hermes_port),
+                "API_SERVER_HOST": "127.0.0.1",
+                "GATEWAY_ALLOW_ALL_USERS": "true",
+            },
+        )
+        assert (
+            "AGUI_BROKER_TOKEN" not in gw_env
+        )  # the token lives in the profile .env only
+        state["token_in_gateway_env"] = False
         # the installer may have rewritten config.yaml: re-assert our settings if the enable entry vanished
         spawn(
             state,
             "hermes",
             [PY, "-m", "hermes_cli.main", "gateway", "run"],
-            hermes_env(
-                home,
-                {
-                    "API_SERVER_ENABLED": "true",
-                    "API_SERVER_KEY": API_KEY,
-                    "API_SERVER_PORT": str(hermes_port),
-                    "API_SERVER_HOST": "127.0.0.1",
-                    "GATEWAY_ALLOW_ALL_USERS": "true",
-                },
-            ),
+            gw_env,
             WORK / "logs" / "hermes.log",
         )
         wait_http(f"http://127.0.0.1:{hermes_port}/health", 120)
+        if multiplex:  # the profile route exists only on a multiplexed gateway
+            wait_http(
+                f"http://127.0.0.1:{hermes_port}/p/{PROFILE}/health",
+                30,
+                headers={"Authorization": f"Bearer {API_KEY}"},
+            )
         spawn(
             state,
             "host",
@@ -209,6 +247,7 @@ def start(statefile: Path, static: str) -> None:
                 BROKER_TOKEN,
                 "--static",
                 static,
+                *(["--multiplex"] if multiplex else []),
             ],
             {**os.environ, "VIRTUAL_ENV": ""},
             WORK / "logs" / "host.log",
@@ -244,5 +283,9 @@ if __name__ == "__main__":
     ap.add_argument("cmd", choices=["start", "stop"])
     ap.add_argument("state")
     ap.add_argument("--static", default="")
+    ap.add_argument("--multiplex", action="store_true")
     a = ap.parse_args()
-    (start(Path(a.state), a.static) if a.cmd == "start" else stop(Path(a.state)))
+    if a.cmd == "start":
+        start(Path(a.state), a.static, a.multiplex)
+    else:
+        stop(Path(a.state))
