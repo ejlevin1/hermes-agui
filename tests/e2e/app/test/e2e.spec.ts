@@ -45,6 +45,11 @@ async function rawRun(surface: string, body: Ev, onChunk?: (t: number, s: string
   for (;;) { const { done, value } = await reader.read(); if (done) break; const s = dec.decode(value); text += s; onChunk?.(Date.now() - t0, s); }
   return { status: r.status, text, ms: Date.now() - t0 };
 }
+/** POST /connect: the replayed transcript (SSE text) for a thread. */
+async function connect(tid: string) {
+  const r = await fetch(`${BASE}/api/copilotkit/agent/test.form/connect`, { method: "POST", headers: { ...HDR, "content-type": "application/json" }, body: JSON.stringify({ threadId: tid, runId: `c-${uid()}` }) });
+  return r.text();
+}
 const userMsg = (text: string) => ({ id: `m-${uid()}`, role: "user", content: text });
 const runBody = (tid: string, messages: Ev[]) => ({ threadId: tid, runId: `r-${uid()}`, state: {}, messages, tools: [], context: [], forwardedProps: {} });
 
@@ -128,12 +133,15 @@ test("5 reload: connect replays the earlier messages", async () => {
   const tid = `t-reload-${uid()}`; const t = await open(ctx, "test.form", tid);
   await say(t.page, "[[SC:text]] remember me");
   await expect(lastAssistant(t.page)).toHaveText("Hello from the mock.", { timeout: 30000 });
+  await expect(t.page.getByTestId("running")).toHaveCount(0, { timeout: 15000 }); await sleep(500); // let the bridge finish the run (store the reply) before the client goes away
   await t.page.close();
+  // connect replays the bridge's transcript store: wait until the assistant reply is stored too
+  await expect.poll(() => connect(tid), { timeout: 15000 }).toContain("Hello from the mock.");
   const t2 = await open(ctx, "test.form", tid);                    // fresh page: client has nothing
   await expect(t2.page.getByTestId("msg-user")).toHaveCount(0);
   await t2.page.getByTestId("reconnect").click();
   await expect(t2.page.getByTestId("msg-user").first()).toContainText("remember me", { timeout: 15000 });
-  await expect(lastAssistant(t2.page)).toHaveText("Hello from the mock.");
+  await expect(lastAssistant(t2.page)).toHaveText("Hello from the mock.", { timeout: 15000 });
   const t3 = await open(ctx, "test.form", `t-never-${uid()}`); await t3.page.getByTestId("reconnect").click(); await sleep(800);
   await expect(t3.page.getByTestId("msg-user")).toHaveCount(0); await expect(t3.page.getByTestId("error")).toHaveCount(0);
 });
@@ -199,4 +207,26 @@ test("9 stop during a human wait does not cost another model call", async () => 
   expect(r.status).toBe(200); await sleep(4000);
   console.log(`model calls: before stop=${before} after stop+4s=${mockReqs().length}`);
   expect(mockReqs().length).toBe(before);                          // the cancelled tool result must not trigger another LLM turn
+});
+
+// Runs only on the multiplexed stack (run.sh phase 2: `stack.py start --multiplex`): one gateway process serves the
+// default profile and `agui-test`; AGUI_BROKER_TOKEN is ONLY in agui-test's .env, never in the gateway's process env.
+test("10 multiplexed gateway: frontend tool across two runs via /p/agui-test, token only in the profile .env", async () => {
+  test.skip(!ST.multiplex, "needs the multiplexed stack (stack.py start --multiplex)");
+  expect(ST.token_in_gateway_env).toBe(false);
+  const tid = `t-mux-${uid()}`; const t = await open(ctx, "test.form", tid); const sid = sidOf("test.form", tid);
+  await say(t.page, "[[SC:fill]] fill it");
+  await expect(t.page.getByTestId("f-title")).toHaveValue("Dune", { timeout: 30000 });
+  await expect(t.page.getByTestId("f-year")).toHaveValue("1965");
+  await expect(lastAssistant(t.page)).toContainText('"bogus": "unknown_field"', { timeout: 30000 });
+  expect(t.runs.length).toBe(2);
+  expect(JSON.parse(t.runs[1].messages.at(-1).content)).toEqual({ title: "ok", year: "ok", bogus: "unknown_field" });
+  const log = await dbgFor(sid);
+  expect(log.find((e) => e.ev === "register_call")).toMatchObject({ name: "set_fields", errors: null });
+  expect(log.find((e) => e.ev === "resolve")).toMatchObject({ accepted: true });
+  // both AG-UI runs are served by ONE Hermes run (the 2nd delivers the tool result via the broker); every Hermes
+  // request of this stack went through the multiplexed profile route
+  const http = (await dbg()).filter((e) => e.ev === "hermes_http");
+  expect(http.filter((e) => e.method === "POST" && e.path === "/p/agui-test/v1/runs").length).toBeGreaterThanOrEqual(1);
+  for (const e of http) expect(e.path.startsWith("/p/agui-test/v1/runs")).toBe(true);
 });

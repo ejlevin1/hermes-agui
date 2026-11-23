@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- **Fix**: `call_frontend_tool` reads `AGUI_BROKER_TOKEN` through the Hermes profile secret scope, so it works on
+  multiplexed gateways (it always reported "not configured" there).
+- Multiplexed-gateway e2e case.
+
 ## 0.1.0 — first release
 
 - **Surfaces**: `Surface` / `SurfaceRegistry` / `FrontendToolSpec` / `Principal` / `TurnContext`; a host app registers

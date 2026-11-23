@@ -830,3 +830,38 @@ def test_sqlite_store_roundtrip_and_persistence(tmp_path):
     s2 = SqliteTranscriptStore(p)
     assert [m["id"] for m in s2.messages("k1")] == ["1", "3"]
     s2.close()
+
+
+async def test_reply_is_stored_on_close_and_on_error(env):
+    t = await run_task(env, [user("hi")])
+    await wait_started(env)
+    env.hermes.push("run_h1", delta("Hello"), done(output="Hello"))
+    await t
+    assert {"role": "assistant", "content": "Hello"} in [
+        {k: m[k] for k in ("role", "content")} for m in env.store.messages(env.sid)
+    ]
+
+
+def stored_assistant(env):
+    return [
+        m["content"] for m in env.store.messages(env.sid) if m["role"] == "assistant"
+    ]
+
+
+async def test_partial_reply_is_stored_when_client_disconnects_mid_text(env):
+    # M1 regression: drive the ASGI app by hand and disconnect before the run ends.
+    task, _sent, recv = await raw_asgi(env.app, "/agui/agent/default/run", RUN_BODY)
+    await wait_started(env)
+    env.hermes.push("run_h1", delta("par"))
+    await settle(50)
+    recv.put_nowait({"type": "http.disconnect"})
+    await asyncio.wait_for(task, 2)
+    assert stored_assistant(env) == ["par"]
+
+
+async def test_partial_reply_is_stored_when_run_fails(env):
+    t = await run_task(env, [user("hi")])
+    await wait_started(env)
+    env.hermes.push("run_h1", delta("par"), done(kind="run.failed", error="boom"))
+    await t
+    assert stored_assistant(env) == ["par"]

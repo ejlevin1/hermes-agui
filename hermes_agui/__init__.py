@@ -3,7 +3,7 @@
 from .api import FRONTEND_TOOL, Broker, HermesClient, TranscriptStore
 from .surface import FrontendToolSpec, Principal, Surface, SurfaceRegistry, TurnContext
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     "FRONTEND_TOOL",
